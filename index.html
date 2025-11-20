@@ -35,7 +35,8 @@
         </div>
 
         <div class="message-line">May your life be filled with magical moments, gentle kindness, sparkling smiles and dreams that grow wings. Shine brighter and spread happiness wherever you go.
-</div>
+        </div>
+
          <!-- PHOTO ALBUM -->
         <div class="photo-album">
           <img class="album-photo" src="001.jpg">
@@ -66,7 +67,7 @@
 
   <!-- Audio -->
   <audio id="myAudio" loop preload="none">
-    <source src="happy.mp3" type="audio/mpeg">
+    <source src="music.mp3" type="audio/mpeg">
   </audio>
 
   <!-- FLOATING BUTTONS -->
@@ -79,16 +80,15 @@
       <button class="close-btn" id="closePopup">&times;</button>
       <h2>Send your wishes to Seyanshi</h2>
 
-      <form id="wishesForm" method="POST"
-        action="https://docs.google.com/forms/d/e/1FAIpQLSdR_NVl2_yV9BtwKcWFRwbfID4SNmyauwCklqOSRSpHLScW2Q/formResponse">
-        <input name="entry.476830613" placeholder="Your Name" required>
-        <textarea name="entry.80548757" placeholder="Your Message" required></textarea>
+      <!-- Updated form: no action attribute, we'll POST via JS -->
+      <form id="wishesForm" method="POST" autocomplete="off">
+        <input id="wishName" name="name" placeholder="Your Name" required>
+        <textarea id="wishMessage" name="message" placeholder="Your Message" required></textarea>
 
         <div class="form-row">
           <button type="submit" class="send-btn">Send</button>
           <button type="button" class="close-btn" id="closePopup2">Close</button>
         </div>
-
       </form>
 
       <p id="thanksMessage" style="display:none;color:green;font-size:16px;margin-top:10px;">
