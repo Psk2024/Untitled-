@@ -1,11 +1,5 @@
 /* -------------------------------------------------------
-   CLEAN MASTER SCRIPT - Full file
-   - Fixed countdown logic (no 364-day jump)
-   - Reveal window: Nov 21 09:00 local → visible for 24 hours
-   - Album slideshow, hearts, sparkles, bokeh
-   - Balloons rising from bottom
-   - Wishes popup wiring
-   - Robust audio toggle
+   CLEAN MASTER SCRIPT - Full file (updated for Apps Script endpoint)
 --------------------------------------------------------- */
 
 (function () {
@@ -32,7 +26,6 @@
     ensure('sparkleCanvas', 'canvas');
   }
 
-  /* ---------- Target calculation: returns startTs, endTs, now ---------- */
   function getTargetStartAndEnd() {
     const now = Date.now();
     const dNow = new Date(now);
@@ -49,12 +42,10 @@
       return { startTs: candidateStart, endTs: candidateEnd, now };
     }
 
-    // already past this year's window → next year
     const nextStart = new Date(year + 1, 10, 21, 9, 0, 0, 0).getTime();
     return { startTs: nextStart, endTs: nextStart + VISIBLE_MS, now };
   }
 
-  /* ---------- Format ms → DD : HH : MM : SS ---------- */
   function formatDiff(ms) {
     if (ms <= 0) return "00 : 00 : 00 : 00";
     const d = Math.floor(ms / 86400000);
@@ -64,7 +55,6 @@
     return `${String(d).padStart(2,'0')} : ${String(h).padStart(2,'0')} : ${String(m).padStart(2,'0')} : ${String(s).padStart(2,'0')}`;
   }
 
-  /* ---------- Update preloader countdown (uses getTargetStartAndEnd) ---------- */
   function updatePreloaderCountdown() {
     const el = $("#preloader-countdown");
     const msg = $("#preloader-message");
@@ -74,16 +64,13 @@
     const diffToStart = startTs - now;
     const diffToEnd = endTs - now;
 
-    // Inside reveal window
     if (now >= startTs && now < endTs) {
       el.textContent = formatDiff(diffToEnd);
       if (msg) msg.textContent = "🎉 It's Birthday Time!";
-      // reveal once
       revealMainContent();
       return;
     }
 
-    // Before start — countdown to start
     if (now < startTs) {
       el.textContent = formatDiff(diffToStart);
       if (msg) {
@@ -93,17 +80,14 @@
       return;
     }
 
-    // After window (shouldn't happen often due to above branches)
     el.textContent = "00 : 00 : 00 : 00";
     if (msg) msg.textContent = "⏳ Event Ended";
   }
 
-  /* ---------- Reveal main content and start visuals ---------- */
   function revealMainContent() {
     if (revealed) return;
     revealed = true;
 
-    // hide preloader
     const pre = $("#preloader");
     if (pre) {
       pre.style.opacity = "0";
@@ -116,24 +100,21 @@
       main.classList.remove("hidden");
       main.classList.add("show-content");
       document.getElementById("audioToggle")?.classList.add("visible");
-document.getElementById("openWishes")?.classList.add("visible");
+      document.getElementById("openWishes")?.classList.add("visible");
     }
 
-    // start visuals
     try { startAlbum(); } catch(e) { console.warn(e); }
     try { startHearts(); } catch(e) { console.warn(e); }
     try { startSparkles(); } catch(e) { console.warn(e); }
     try { startBokeh(); } catch(e) { console.warn(e); }
     try { startBalloons(); } catch(e) { console.warn(e); }
 
-    // show buttons
     const audioBtn = $("#audioToggle");
     const wishBtn = $("#openWishes");
     if (audioBtn) { audioBtn.style.opacity = "1"; audioBtn.style.pointerEvents = "auto"; }
     if (wishBtn) { wishBtn.style.opacity = "1"; wishBtn.style.pointerEvents = "auto"; }
   }
 
-  /* ---------- schedule reload/hide after reveal window ends ---------- */
   function scheduleHideAfterWindow(endTs) {
     const now = Date.now();
     const ms = endTs - now;
@@ -143,7 +124,6 @@ document.getElementById("openWishes")?.classList.add("visible");
     }, ms + 500);
   }
 
-  /* ---------- Album slideshow ---------- */
   function startAlbum() {
     const photos = Array.from(document.querySelectorAll(".photo-album .album-photo"));
     const captionEl = $("#album-caption");
@@ -161,77 +141,75 @@ document.getElementById("openWishes")?.classList.add("visible");
     if (album) album.classList.add('glow');
   }
 
-  /* ---------- Hearts (simple DOM hearts) ---------- */
   function startHearts(opts = {}) {
-  const cfg = Object.assign({ max: 30, spawnInterval: 600 }, opts);
-  if (REDUCED) { console.log('startHearts: reduced motion enabled — disabled'); return { stop: () => {} }; }
+    const cfg = Object.assign({ max: 30, spawnInterval: 600 }, opts);
+    if (window.REDUCED) { console.log('startHearts: reduced motion enabled — disabled'); return { stop: () => {} }; }
 
-  const container = ensureEl('floating-hearts', 'div');
-  container.style.pointerEvents = 'none';
+    const container = (function ensureEl(id, tag='div') {
+      let el = document.getElementById(id);
+      if (!el) {
+        el = document.createElement(tag);
+        el.id = id;
+        document.body.appendChild(el);
+      }
+      return el;
+    })('floating-hearts','div');
+    container.style.pointerEvents = 'none';
 
-  // Pool of reusable heart nodes
-  const pool = [];
-  let activeCount = 0;
-  let spawnTimer = null;
+    const pool = [];
+    let activeCount = 0;
+    let spawnTimer = null;
 
-  function createNode() {
-    const el = document.createElement('div');
-    el.className = 'f-heart';
-    el.style.position = 'absolute';
-    el.style.willChange = 'transform, opacity';
-    el.style.opacity = '0';
-    return el;
-  }
-
-  function spawn() {
-    if (activeCount >= cfg.max) return;
-    const node = pool.length ? pool.pop() : createNode();
-    node.textContent = ['💖','💗','💞','💕'][Math.floor(Math.random()*4)];
-    const size = 14 + Math.random() * 26;
-    node.style.fontSize = size + 'px';
-    const left = Math.random() * 100;
-    node.style.left = `calc(${left}vw - ${size/2}px)`;
-    node.style.opacity = '1';
-    node.style.transform = `translateY(0) scale(${0.9 + Math.random()*0.3})`;
-    container.appendChild(node);
-    activeCount++;
-
-    // animate using CSS transitions but timed removal to reuse element
-    const dur = 4200 + Math.random() * 2400;
-    node.style.transition = `transform ${dur}ms cubic-bezier(.22,.9,.26,1), opacity ${dur}ms linear`;
-    // force reflow then animate
-    requestAnimationFrame(() => {
-      node.style.transform = `translateY(-${120 + Math.random()*160}px) scale(${1 + Math.random()*0.15})`;
-      node.style.opacity = '0';
-    });
-
-    // return to pool after animation
-    setTimeout(() => {
-      try { node.remove(); } catch (e) {}
-      node.style.transition = '';
-      pool.push(node);
-      activeCount--;
-    }, dur + 80);
-  }
-
-  // start spawning
-  spawnTimer = setInterval(spawn, cfg.spawnInterval);
-
-  // spawn a few upfront
-  for (let i=0;i<4;i++) setTimeout(spawn, i*200);
-
-  return {
-    stop() {
-      clearInterval(spawnTimer);
-      spawnTimer = null;
-      // cleanup nodes in DOM (but keep pool)
-      pool.forEach(n => { try { n.remove(); } catch(e){} });
+    function createNode() {
+      const el = document.createElement('div');
+      el.className = 'f-heart';
+      el.style.position = 'absolute';
+      el.style.willChange = 'transform, opacity';
+      el.style.opacity = '0';
+      return el;
     }
-  };
-}
 
-  
-  /* ---------- Sparkles canvas ---------- */
+    function spawn() {
+      if (activeCount >= cfg.max) return;
+      const node = pool.length ? pool.pop() : createNode();
+      node.textContent = ['💖','💗','💞','💕'][Math.floor(Math.random()*4)];
+      const size = 14 + Math.random() * 26;
+      node.style.fontSize = size + 'px';
+      const left = Math.random() * 100;
+      node.style.left = `calc(${left}vw - ${size/2}px)`;
+      node.style.opacity = '1';
+      node.style.transform = `translateY(0) scale(${0.9 + Math.random()*0.3})`;
+      container.appendChild(node);
+      activeCount++;
+
+      const dur = 4200 + Math.random() * 2400;
+      node.style.transition = `transform ${dur}ms cubic-bezier(.22,.9,.26,1), opacity ${dur}ms linear`;
+      requestAnimationFrame(() => {
+        node.style.transform = `translateY(-${120 + Math.random()*160}px) scale(${1 + Math.random()*0.15})`;
+        node.style.opacity = '0';
+      });
+
+      setTimeout(() => {
+        try { node.remove(); } catch (e) {}
+        node.style.transition = '';
+        pool.push(node);
+        activeCount--;
+      }, dur + 80);
+    }
+
+    spawnTimer = setInterval(spawn, cfg.spawnInterval);
+
+    for (let i=0;i<4;i++) setTimeout(spawn, i*200);
+
+    return {
+      stop() {
+        clearInterval(spawnTimer);
+        spawnTimer = null;
+        pool.forEach(n => { try { n.remove(); } catch(e){} });
+      }
+    };
+  }
+
   function startSparkles() {
     const canvas = $("#sparkleCanvas");
     if (!canvas) return;
@@ -267,7 +245,6 @@ document.getElementById("openWishes")?.classList.add("visible");
     step();
   }
 
-  /* ---------- Bokeh canvas ---------- */
   function startBokeh() {
     const canvas = $("#bokehCanvas");
     if (!canvas) return;
@@ -290,7 +267,6 @@ document.getElementById("openWishes")?.classList.add("visible");
     draw();
   }
 
-  /* ---------- Balloons ---------- */
   function startBalloons(cfg = {}) {
     const container = $("#balloons");
     if (!container) return;
@@ -316,13 +292,12 @@ document.getElementById("openWishes")?.classList.add("visible");
     }
 
     for (let i=0;i<count;i++) spawnOne();
-    // continuous spawn
     if (!container._balloonInterval) {
       container._balloonInterval = setInterval(()=> { for(let k=0;k< (1+Math.floor(Math.random()*2));k++) spawnOne(); }, 6000 + Math.random()*4000);
     }
   }
 
-  /* ---------- Wishes popup wiring ---------- */
+  /* ---------- Wishes popup wiring (UPDATED to use Apps Script GET) ---------- */
   function wireWishes() {
     const open = $("#openWishes");
     const close = $("#closePopup");
@@ -334,13 +309,7 @@ document.getElementById("openWishes")?.classList.add("visible");
     if (close) close.addEventListener('click', ()=> { if (popup) popup.style.display = 'none'; });
     if (close2) close2.addEventListener('click', ()=> { if (popup) popup.style.display = 'none'; });
 
-    if (form) form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const thanks = $("#thanksMessage"); if (thanks) { thanks.style.display = 'block'; }
-      setTimeout(()=> { if (popup) popup.style.display = 'none'; if (thanks) thanks.style.display = 'none'; }, 2000);
-    });
-
-    // reactions - simple visual pop
+    // Reactions wiring (unchanged)
     document.querySelectorAll('.reaction').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const parent = btn.closest('.popup-content');
@@ -357,6 +326,46 @@ document.getElementById("openWishes")?.classList.add("visible");
         setTimeout(()=> el.remove(), 900);
       });
     });
+
+    // --- NEW: client-side submission using your Apps Script GET endpoint ---
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const nameEl = document.getElementById('wishName');
+        const msgEl = document.getElementById('wishMessage');
+        const name = nameEl ? nameEl.value.trim() : '';
+        const message = msgEl ? msgEl.value.trim() : '';
+
+        if (!name || !message) {
+          alert('Please enter name and message.');
+          return;
+        }
+
+        const thanks = document.getElementById('thanksMessage');
+        if (thanks) { thanks.style.display = 'block'; }
+
+        // <-- YOUR APPS SCRIPT URL (from deployment) -->
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwitvUfdApwgmCQNvbSO1OhxwKP8ljPrg-pTOSEN5pWcCnoCNsQ3J9E7aAPZZ2t2y7yvA/exec';
+
+        // Build GET URL
+        const url = APPS_SCRIPT_URL + '?name=' + encodeURIComponent(name) + '&message=' + encodeURIComponent(message);
+
+        // Use fetch with no-cors so the browser won't block due to missing CORS headers.
+        // The request still reaches Apps Script and the sheet gets appended.
+        fetch(url, { method: 'GET', mode: 'no-cors' })
+          .catch((err) => {
+            console.warn('Send error (this may still succeed server-side):', err);
+          });
+
+        // Close popup after brief delay and reset form
+        setTimeout(()=> {
+          if (popup) popup.style.display = 'none';
+          if (thanks) thanks.style.display = 'none';
+          form.reset();
+        }, 1100);
+      });
+    }
   }
 
   /* ---------- Robust audio toggle ---------- */
@@ -372,15 +381,13 @@ document.getElementById("openWishes")?.classList.add("visible");
       audio.preload = 'none';
       document.body.appendChild(audio);
     }
-    // set default src if not present (adjust path if needed)
-    if (!audio.src || audio.src.trim() === '') audio.src = "happy.mp3";
+    if (!audio.src || audio.src.trim() === '') audio.src = "music.mp3";
 
     function setIcon(isPlaying) {
       btn.textContent = isPlaying ? '🔊' : '🔇';
       btn.setAttribute('aria-pressed', isPlaying ? 'true' : 'false');
     }
 
-    // initialize icon
     setIcon(!audio.paused && !audio.ended);
 
     btn.style.pointerEvents = 'auto';
@@ -396,12 +403,10 @@ document.getElementById("openWishes")?.classList.add("visible");
         }
       } catch (err) {
         console.warn('Audio play error:', err);
-        // fallback: show play icon so user can attempt again
         btn.textContent = '▶️';
       }
     });
 
-    // opportunistic play on first user gesture
     function firstGesture() {
       try {
         if (audio.paused) {
@@ -417,31 +422,23 @@ document.getElementById("openWishes")?.classList.add("visible");
 
   /* ---------- Initialization ---------- */
   document.addEventListener('DOMContentLoaded', ()=> {
-    // set preloader countdown updater
     updatePreloaderCountdown();
     countdownInterval = setInterval(updatePreloaderCountdown, 1000);
 
-    // wire popup and audio
     wireWishes();
     wireAudio();
 
-    // schedule reveal if target is in future (also ensures reveal if page stays open)
     const { startTs, endTs, now } = getTargetStartAndEnd();
     if (now < startTs) {
       const msUntil = startTs - now;
       revealTimeout = setTimeout(()=> {
-        // stop regular countdown and reveal
         if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
         revealMainContent();
-        // hide after window
         scheduleHideAfterWindow(endTs);
       }, msUntil + 50);
     } else if (now >= startTs && now < endTs) {
-      // already inside window — reveal and schedule hide
       revealMainContent();
       scheduleHideAfterWindow(endTs);
-    } else {
-      // in case now >= endTs, countdownInterval will handle next year's schedule via getTargetStartAndEnd
     }
   });
 
@@ -450,9 +447,8 @@ document.getElementById("openWishes")?.classList.add("visible");
   window.__startBalloons = function(){ startBalloons(); };
 
 })();
-// VISUALS BOOTSTRAP - ensures containers exist and starts visuals
+
 (function(){
-  // ensure required DOM nodes exist
   function ensure(id, tag='div') {
     let el = document.getElementById(id);
     if (!el) {
