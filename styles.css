@@ -193,20 +193,33 @@ html,body{
 
 /* Album - glass matching */
 .photo-album {
-  position:relative;
-  height:360px;
-  border-radius:18px;
-  overflow:hidden;
-  margin:14px auto 8px;
-  background:#000;
+  position: relative;
+  height: 360px;
+  border-radius: 18px;
+  overflow: hidden;
+  margin: 14px auto 8px;
+
+  /* Beautiful gold border */
+  border: 4px solid rgba(255, 215, 120, 0.85);
+
+  /* Royal shadow + warm glow */
+  box-shadow:
+    0 0 25px rgba(255, 215, 120, 0.45),  /* outer gold glow */
+    0 12px 30px rgba(0, 0, 0, 0.55);     /* deep soft shadow */
+
+  /* Keep background dark behind photos */
+  background: #000;
   animation: albumGlow 5s ease-in-out infinite;
 }
 
+
+
 @keyframes albumGlow {
-  0% { box-shadow:0 0 20px rgba(255,215,120,0.3); }
-  50% { box-shadow:0 0 40px rgba(255,215,120,0.8); }
-  100% { box-shadow:0 0 20px rgba(255,215,120,0.3); }
+  0% { box-shadow:0 0 20px rgba(255, 215, 120, 0.4); }
+  50% { box-shadow:0 0 45px rgba(255, 215, 120, 0.8); }
+  100% { box-shadow:0 0 20px rgba(255, 215, 120, 0.4); }
 }
+  
 .album-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1.1s ease}
 .album-photo.active{opacity:1}
 .album-caption{
