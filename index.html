@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Untitled</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <!-- Background -->
+  <div class="bg1"></div>
+  <div class="bg-overlay"></div>
+
+  <!-- PRELOADER -->
+  <div id="preloader">
+    <div class="preloader-inner">
+      <div class="spinner"></div>
+      <div id="preloader-countdown">00 : 00 : 00 : 00</div>
+      <div id="preloader-subtext">Loading...</div>
+   </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <main id="mainContent" class="hidden">
+    <div class="container">
+      <section class="header">
+
+        <div class="intro-line">Wish You a</div>
+        <div class="lordeffect">HAPPY BIRTHDAY</div>
+
+        <div class="names-row">
+          <h1 class="handwriting-names name-entrance">Seyanshi</h1>
+        </div>
+
+        <div class="message-line">May your life be filled with magical moments, gentle kindness, sparkling smiles and dreams that grow wings. Shine brighter and spread happiness wherever you go.
+</div>
+         <!-- PHOTO ALBUM -->
+        <div class="photo-album">
+          <img class="album-photo" src="001.jpg">
+          <img class="album-photo" src="002.jpg">
+          <img class="album-photo" src="003.jpg">
+          <img class="album-photo" src="004.jpg">
+          <img class="album-photo" src="005.jpg">
+          <img class="album-photo" src="006.jpg">
+          <img class="album-photo" src="007.jpg">
+         </div>
+
+        <!-- Footer text -->
+        <div class="footer-dancers">
+          <div style="flex:1;text-align:center;padding:12px 18px;">
+            May your day be full of sparkle and smiles.
+          </div>
+        </div>
+
+      </section>
+    </div>
+  </main>
+
+  <!-- Visual Layers -->
+  <div id="balloons"></div>
+  <div id="floating-hearts"></div>
+  <canvas id="bokehCanvas"></canvas>
+  <canvas id="sparkleCanvas"></canvas>
+
+  <!-- Audio -->
+  <audio id="myAudio" loop preload="none">
+    <source src="music.mp3" type="audio/mpeg">
+  </audio>
+
+  <!-- FLOATING BUTTONS -->
+  <button id="openWishes" class="floating-wish-btn" aria-label="Open wishes">💌</button>
+  <button id="audioToggle" class="floating-button" aria-label="Toggle audio">🔇</button>
+
+  <!-- WISHES POPUP -->
+  <div id="wishesPopup" class="popup">
+    <div class="popup-content">
+      <button class="close-btn" id="closePopup">&times;</button>
+      <h2>Send your wishes to Seyanshi</h2>
+
+      <form id="wishesForm" method="POST"
+        action="https://docs.google.com/forms/d/e/1FAIpQLSdR_NVl2_yV9BtwKcWFRwbfID4SNmyauwCklqOSRSpHLScW2Q/formResponse">
+        <input name="entry.476830613" placeholder="Your Name" required>
+        <textarea name="entry.80548757" placeholder="Your Message" required></textarea>
+
+        <div class="form-row">
+          <button type="submit" class="send-btn">Send</button>
+          <button type="button" class="close-btn" id="closePopup2">Close</button>
+        </div>
+
+      </form>
+
+      <p id="thanksMessage" style="display:none;color:green;font-size:16px;margin-top:10px;">
+        Thank you — your wishes have been recorded! 🎉
+      </p>
+
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
