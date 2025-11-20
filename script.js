@@ -1,360 +1,463 @@
-:root{
-  --accent: #c84b9a;
-  --accent-2: #ffd86b;
-  --gold: #f5c86f;
-  --cream: #fff9f0;
-  --card-bg: rgba(255,255,255,0.22);
-  --text-dark: #f7efe8;
-}
+/* -------------------------------------------------------
+   CLEAN MASTER SCRIPT - Full file (updated for Apps Script endpoint)
+--------------------------------------------------------- */
 
-/* Reset */
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{
-  height:100%;
-  font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;
-  background:linear-gradient(180deg,#081a4a,#0e3a7a); /* fallback while back.png loads */
-  color:var(--text-dark);
-}
+(function () {
+  const $ = s => document.querySelector(s);
+  let countdownInterval = null;
+  let revealTimeout = null;
+  const VISIBLE_MS = 24 * 60 * 60 * 1000; // 24 hours
+  let revealed = false;
+  
+  function ensureVisualContainers() {
+    const ensure = (id, tag = 'div') => {
+      let el = document.getElementById(id);
+      if (!el) {
+        el = document.createElement(tag);
+        el.id = id;
+        document.body.appendChild(el);
+        console.log('[ensure] created', id);
+      }
+      return el;
+    };
+    ensure('balloons', 'div');
+    ensure('floating-hearts', 'div');
+    ensure('bokehCanvas', 'canvas');
+    ensure('sparkleCanvas', 'canvas');
+  }
 
-/* Background (uses back.png in same folder) */
-.bg1{
-  position:fixed;
-  inset:0;
-  z-index:-40;
-  background: url("back.png") center/cover no-repeat;
-  background-size: cover;
-  filter: saturate(1.1) brightness(.95);
-}
-.bg-overlay{
-  position:fixed;
-  inset:0;
-  z-index:-35;
-  background: rgba(10,25,60,0.32);
-  backdrop-filter: blur(2px);
-  pointer-events:none;
-}
+  function getTargetStartAndEnd() {
+    const now = Date.now();
+    const dNow = new Date(now);
+    const year = dNow.getFullYear();
 
-/* ---------- Visual containers (single-instance, positive z-index) ----------
-   Balloons, hearts and canvases should be above background but below the .container (.container z-index = 10)
-------------------------------------------------------------------------- */
-#bokehCanvas, #sparkleCanvas {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1500; /* above bg, below hearts/balloons */
-}
+    const candidateStart = new Date(year, 10, 21, 9, 0, 0, 0).getTime(); // Nov 21, 09:00 local
+    const candidateEnd = candidateStart + VISIBLE_MS;
 
-#balloons {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 0;
-  pointer-events: none;
-  z-index: 2000;
-  overflow: visible;
-}
+    if (now < candidateStart) {
+      return { startTs: candidateStart, endTs: candidateEnd, now };
+    }
 
-#floating-hearts {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2000;
-  overflow: visible;
-}
-/* Glass + glow */
-.floating-button, .floating-wish-btn {
-  position: fixed;
-  bottom: 22px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
-  backdrop-filter: blur(6px) saturate(1.1);
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(13,33,85,0.45), 0 2px 8px rgba(255,200,120,0.06) inset;
-  opacity: 0;
-  transform: translateY(12px) scale(.98);
-  transition: opacity .55s ease, transform .55s cubic-bezier(.2,.9,.2,1), box-shadow .25s;
-  z-index:4000;
-  pointer-events:none;
-}
+    if (now >= candidateStart && now < candidateEnd) {
+      return { startTs: candidateStart, endTs: candidateEnd, now };
+    }
 
-/* color accents */
-.floating-button { right:18px; background-image: linear-gradient(180deg, rgba(26,56,111,0.9), rgba(47,100,190,0.95)); color: #fff; }
-.floating-wish-btn { left:18px; background-image: linear-gradient(180deg, rgba(255,210,110,0.95), rgba(255,182,90,0.95)); color: #101010; }
+    const nextStart = new Date(year + 1, 10, 21, 9, 0, 0, 0).getTime();
+    return { startTs: nextStart, endTs: nextStart + VISIBLE_MS, now };
+  }
 
-/* subtle pulsing glow on hover / focus */
-.floating-button:hover, .floating-wish-btn:hover {
-  box-shadow: 0 20px 60px rgba(60,120,220,0.18), 0 8px 30px rgba(0,0,0,0.28);
-  transform: translateY(0) scale(1.02);
-  cursor: pointer;
-}
+  function formatDiff(ms) {
+    if (ms <= 0) return "00 : 00 : 00 : 00";
+    const d = Math.floor(ms / 86400000);
+    const h = Math.floor((ms % 86400000) / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${String(d).padStart(2,'0')} : ${String(h).padStart(2,'0')} : ${String(m).padStart(2,'0')} : ${String(s).padStart(2,'0')}`;
+  }
 
-/* visible state */
-.floating-button.visible, .floating-wish-btn.visible {
-  opacity:1; transform: translateY(0) scale(1); pointer-events:auto;
-}
+  function updatePreloaderCountdown() {
+    const el = $("#preloader-countdown");
+    const msg = $("#preloader-message");
+    if (!el) return;
 
-/* mobile */
-@media (max-width:600px) {
-  .floating-button, .floating-wish-btn { padding:10px; border-radius:12px; bottom:12px; font-size:16px; }
-}
-/* PRELOADER */
-#preloader{
-  position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-  z-index:3000;background:rgba(0,0,0,0.18);
-}
-.preloader-inner{
-  padding:20px;text-align:center;
-  background: rgba(255,255,255,0.08);
-  border-radius:16px;
-  max-width:420px;
-  border:1px solid rgba(255,255,255,0.06);
-  box-shadow: 0 20px 50px rgba(0,0,0,0.45);
-  backdrop-filter: blur(6px) saturate(1.2);
-}
-.spinner{
-  width:44px;height:44px;border-radius:50%;
-  border:6px solid rgba(255,255,255,0.06);
-  border-top-color:var(--gold);
-  margin:0 auto 12px;animation:spin 1s linear infinite;
-}
-@keyframes spin{to{transform:rotate(360deg)}}
-#preloader-message{font-size:17px;color:var(--gold)}
-#preloader-countdown{font-weight:800;font-size:22px;color:var(--accent-2);margin-top:6px;letter-spacing:2px;animation:pulse 2s infinite}
-@keyframes pulse{50%{transform:scale(1.03)}}
-#preloader-subtext{font-size:13px;color:rgba(255,235,200,0.9);margin-top:6px}
-#countdown-ring{position:absolute;top:14px;right:14px;}
+    const { startTs, endTs, now } = getTargetStartAndEnd();
+    const diffToStart = startTs - now;
+    const diffToEnd = endTs - now;
 
-/* MAIN container and card (glass) */
-.container{display:flex;justify-content:center;padding:28px;z-index:10;position:relative}
-.header{
-  width:min(860px,96%);
-  padding:32px;
-  border-radius:22px;
+    if (now >= startTs && now < endTs) {
+      el.textContent = formatDiff(diffToEnd);
+      if (msg) msg.textContent = "🎉 It's Birthday Time!";
+      revealMainContent();
+      return;
+    }
 
-  /* GLASS effect */
-  background: rgba(255,255,255,0.22);
-  backdrop-filter: blur(22px) saturate(1.4);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    if (now < startTs) {
+      el.textContent = formatDiff(diffToStart);
+      if (msg) {
+        const sd = new Date(startTs);
+        msg.textContent = `Opens on ${sd.toLocaleDateString()} ${sd.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+      }
+      return;
+    }
 
-  border:1px solid rgba(255,255,255,0.35);
-  box-shadow:
-    0 20px 50px rgba(0,0,0,0.25),
-    inset 0 0 35px rgba(255,255,255,0.12);
+    el.textContent = "00 : 00 : 00 : 00";
+    if (msg) msg.textContent = "⏳ Event Ended";
+  }
 
-  text-align:center;
-}
+  function revealMainContent() {
+    if (revealed) return;
+    revealed = true;
 
-/* Titles + text tuned to blue/gold palette */
-.intro-line{
-  font-family:'Cinzel',serif;
-  letter-spacing:2px;
-  font-size:23px;
-  color:#ffe6a2;
-/*  color:var(--gold); */
-  margin-bottom:6px;
-}
-.lordeffect{
-  font-family:'Cinzel',serif;
-  font-size:30px;
-  color:#ffe6a2;
-  text-shadow:0 2px 6px rgba(0,0,0,0.25);
-  margin:6px 0;
-}
-.names-row{margin:12px 0;display:flex;align-items:center;justify-content:center}
-.crown{font-size:22px;margin-right:8px;filter:drop-shadow(0 6px 12px rgba(0,0,0,0.45))}
-.handwriting-names{
-  font-family:'Great Vibes',cursive;
-  font-size:90px;
-  color:var(--gold);
-   /* soft creamy gold */
-  text-shadow:0 3px 12px rgba(0,0,0,0.45);
-}
-.date-line,.message-line,.from-line{
-  color:var(--cream);
-  font-weight:400;
-  text-shadow:0 1px 4px rgba(0,0,0,0.35);
-  margin:6px 0;
-}
-.message-line {
-  text-align: justify;
-  text-justify: inter-word;
-  line-height: 1.6;
-}
-/* Name entrance animation */
-@keyframes namePop{
-  0%{opacity:0;transform:translateY(20px) scale(.85)}
-  60%{opacity:1;transform:translateY(-6px) scale(1.1)}
-  100%{opacity:1;transform:translateY(0) scale(1)}
-}
-.handwriting-names.name-entrance{animation:namePop 1.6s ease}
+    const pre = $("#preloader");
+    if (pre) {
+      pre.style.opacity = "0";
+      pre.style.pointerEvents = "none";
+      setTimeout(()=> { try { pre.remove(); } catch(e) {} }, 600);
+    }
 
-/* Album - glass matching */
-.photo-album{
-  position:relative;
-  height:360px;
-  border-radius:18px;
-  overflow:hidden;
-  margin:14px auto 8px;
+    const main = $("#mainContent");
+    if (main) {
+      main.classList.remove("hidden");
+      main.classList.add("show-content");
+      document.getElementById("audioToggle")?.classList.add("visible");
+      document.getElementById("openWishes")?.classList.add("visible");
+    }
 
-  /* REMOVE transparency & blur */
-  background: #000;          /* or any solid color */
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border: none;
-  box-shadow: none;
-}
-.album-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1.1s ease}
-.album-photo.active{opacity:1}
-.album-caption{
-  position:absolute;left:12px;bottom:12px;padding:8px 16px;
-  background:rgba(0,0,0,0.55);
-  color:#ffe7aa;
-  backdrop-filter:blur(6px);
-  border-radius:10px;
-  text-shadow:0 2px 4px rgba(0,0,0,0.6);
-}
+    try { startAlbum(); } catch(e) { console.warn(e); }
+    try { startHearts(); } catch(e) { console.warn(e); }
+    try { startSparkles(); } catch(e) { console.warn(e); }
+    try { startBokeh(); } catch(e) { console.warn(e); }
+    try { startBalloons(); } catch(e) { console.warn(e); }
 
-/* Footer dancers — sized and stylized */
-.footer-dancers{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px;margin-bottom:10px}
-.footer-dancers .dancers img{
-  height:110px;
-  width:auto;
-  object-fit:contain;
-  display:block;
-  margin:0 auto;
-  opacity:0.95;
-  filter: drop-shadow(0 8px 12px rgba(0,0,0,0.45));
-}
+    const audioBtn = $("#audioToggle");
+    const wishBtn = $("#openWishes");
+    if (audioBtn) { audioBtn.style.opacity = "1"; audioBtn.style.pointerEvents = "auto"; }
+    if (wishBtn) { wishBtn.style.opacity = "1"; wishBtn.style.pointerEvents = "auto"; }
+  }
 
-/* Floating action buttons colored for theme */
-/* Royal Glass Buttons (Best Theme Match) */
-.floating-button,
-.floating-wish-btn {
-  position: fixed;
-  bottom: 20px;
-  padding: 10px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.20);
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(10px) saturate(1.4);
-  font-size: 20px;
-  line-height: 1;
-  z-index: 5000;
-  opacity: 0;
-  transform: translateY(14px) scale(.94);
-  pointer-events: none;
-  transition: opacity .5s ease, transform .5s cubic-bezier(.15,1,.30,1);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.32), inset 0 0 18px rgba(255,255,255,0.25);
-}
+  function scheduleHideAfterWindow(endTs) {
+    const now = Date.now();
+    const ms = endTs - now;
+    if (ms <= 0) return;
+    setTimeout(()=> {
+      try { location.reload(); } catch(e) {}
+    }, ms + 500);
+  }
 
-/* Audio Button (Right) */
-.floating-button {
-  right: 18px;
-  width: 56px;
-  height: 56px;
-  padding: 0;
-  border-radius: 50%;
-  background: linear-gradient(135deg,#1e3f8f,#4c79d2);
-  color: #fff;
-}
+  function startAlbum() {
+    const photos = Array.from(document.querySelectorAll(".photo-album .album-photo"));
+    const captionEl = $("#album-caption");
+    if (!photos.length) return;
+    let idx = 0;
+    photos.forEach((p,i) => p.classList.toggle("active", i===0));
+    if (captionEl) captionEl.textContent = photos[0].dataset.caption || '';
+    setInterval(()=> {
+      photos[idx].classList.remove('active');
+      idx = (idx + 1) % photos.length;
+      photos[idx].classList.add('active');
+      if (captionEl) captionEl.textContent = photos[idx].dataset.caption || '';
+    }, 2000);
+    const album = document.querySelector('.photo-album');
+    if (album) album.classList.add('glow');
+  }
 
-/* Wishes Button (Left) */
-.floating-wish-btn {
-  left: 18px;
-  background: linear-gradient(135deg,#ffd86b,#ffb157);
-  color: #222;
-  font-weight: 600;
-}
+  function startHearts(opts = {}) {
+    const cfg = Object.assign({ max: 30, spawnInterval: 600 }, opts);
+    if (window.REDUCED) { console.log('startHearts: reduced motion enabled — disabled'); return { stop: () => {} }; }
 
-/* Visible class (added by JS after reveal) */
-.floating-button.visible,
-.floating-wish-btn.visible {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  pointer-events: auto;
-}
+    const container = (function ensureEl(id, tag='div') {
+      let el = document.getElementById(id);
+      if (!el) {
+        el = document.createElement(tag);
+        el.id = id;
+        document.body.appendChild(el);
+      }
+      return el;
+    })('floating-hearts','div');
+    container.style.pointerEvents = 'none';
 
-/* Hover effect */
-.floating-button:hover,
-.floating-wish-btn:hover {
-  transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.38);
-}
-/* Popup overlay and content */
-.popup{
-  display:none;position:fixed;inset:0;background:rgba(0,0,0,0.28);backdrop-filter:blur(4px);
-  padding:20px;align-items:center;justify-content:center;z-index:5000;
-}
-.popup .popup-content{
-  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,245,0.9));
-  padding:18px;border-radius:14px;max-width:420px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,0.18);
-}
-.popup h2{margin-bottom:8px;color:#334b7a}
-.reactions{display:flex;gap:8px;margin-bottom:8px}
-.reaction{background:linear-gradient(90deg,var(--accent-2),var(--accent));border:none;padding:8px 10px;border-radius:10px;color:#fff;font-size:18px;cursor:pointer}
-.popup input,.popup textarea{width:100%;padding:10px;margin:8px 0;border:1px solid #efe6e9;border-radius:10px}
-.form-row{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
-.send-btn{background:linear-gradient(90deg,#4a7bd4,#1d3f93);border:none;color:#fff;padding:10px 14px;border-radius:10px}
-.close-btn{background:#eee;border:none;padding:10px 12px;border-radius:10px}
+    const pool = [];
+    let activeCount = 0;
+    let spawnTimer = null;
 
-/* Helpers */
-.hidden{display:none !important}
-.show-content{opacity:1;visibility:visible;transform:none}
+    function createNode() {
+      const el = document.createElement('div');
+      el.className = 'f-heart';
+      el.style.position = 'absolute';
+      el.style.willChange = 'transform, opacity';
+      el.style.opacity = '0';
+      return el;
+    }
 
-/* Balloons (floating from bottom → top) */
-/* balloon shape */
-.balloon {
-  position: absolute;
-  bottom: -30px; /* start slightly off-screen */
-  border-radius: 52% 48% 48% 52% / 58% 56% 44% 42%;
-  opacity: 0.95;
-  transform-origin: center bottom;
-  will-change: transform, left, top, opacity;
-  filter: drop-shadow(0 8px 18px rgba(0,0,0,0.25));
-  pointer-events: none;
-}
-.balloon::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: -10px;
-  width: 2px;
-  height: 36px;
-  background: linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.04));
-  border-radius: 2px;
-  opacity: 0.7;
-}
-@keyframes riseUp {
-  0% { transform: translateY(0) rotate(0deg); opacity: 0; }
-  6% { opacity: 1; }
-  60% { transform: translateY(-60vh) rotate(-6deg); }
-  100% { transform: translateY(-120vh) rotate(10deg); opacity: 0.98; }
-}
-@keyframes sway {
-  0% { transform: translateX(0) }
-  25% { transform: translateX(18px) }
-  50% { transform: translateX(-12px) }
-  75% { transform: translateX(10px) }
-  100% { transform: translateX(0) }
-}
+    function spawn() {
+      if (activeCount >= cfg.max) return;
+      const node = pool.length ? pool.pop() : createNode();
+      node.textContent = ['💖','💗','💞','💕'][Math.floor(Math.random()*4)];
+      const size = 14 + Math.random() * 26;
+      node.style.fontSize = size + 'px';
+      const left = Math.random() * 100;
+      node.style.left = `calc(${left}vw - ${size/2}px)`;
+      node.style.opacity = '1';
+      node.style.transform = `translateY(0) scale(${0.9 + Math.random()*0.3})`;
+      container.appendChild(node);
+      activeCount++;
 
-/* Floating hearts */
-.f-heart{position:absolute;animation:rise linear infinite;opacity:0.7}
-@keyframes rise{
-  0%{transform:translateY(0) scale(.9);opacity:0.5}
-  50%{opacity:0.8}
-  100%{transform:translateY(-160px) scale(1.1);opacity:0}
-}
+      const dur = 4200 + Math.random() * 2400;
+      node.style.transition = `transform ${dur}ms cubic-bezier(.22,.9,.26,1), opacity ${dur}ms linear`;
+      requestAnimationFrame(() => {
+        node.style.transform = `translateY(-${120 + Math.random()*160}px) scale(${1 + Math.random()*0.15})`;
+        node.style.opacity = '0';
+      });
 
-/* small responsive tweaks */
-@media (max-width:600px){
-  .photo-album{height:360px}
-  .handwriting-names{font-size:44px}
-  .footer-dancers .dancers img{height:80px}
-  .preloader-inner{padding:14px}
-  .handwriting-names{font-size:44px}
-}
+      setTimeout(() => {
+        try { node.remove(); } catch (e) {}
+        node.style.transition = '';
+        pool.push(node);
+        activeCount--;
+      }, dur + 80);
+    }
+
+    spawnTimer = setInterval(spawn, cfg.spawnInterval);
+
+    for (let i=0;i<4;i++) setTimeout(spawn, i*200);
+
+    return {
+      stop() {
+        clearInterval(spawnTimer);
+        spawnTimer = null;
+        pool.forEach(n => { try { n.remove(); } catch(e){} });
+      }
+    };
+  }
+
+  function startSparkles() {
+    const canvas = $("#sparkleCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    function resize(){ canvas.width = innerWidth; canvas.height = innerHeight; }
+    resize(); window.addEventListener('resize', resize);
+    const sparks = [];
+    function add() {
+      sparks.push({
+        x: Math.random()*canvas.width,
+        y: Math.random()*canvas.height*0.6,
+        vx: (Math.random()-0.5)*0.3,
+        vy: -1 - Math.random()*1.4,
+        life: 40 + Math.random()*60,
+        r: 1 + Math.random()*3,
+        a: 0.7 + Math.random()*0.2
+      });
+      if (sparks.length > 160) sparks.splice(0,30);
+    }
+    setInterval(add, 200);
+    function step(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      for (let i = sparks.length-1; i>=0; i--){
+        const s = sparks[i];
+        s.x += s.vx; s.y += s.vy; s.life--;
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(255,255,255,${Math.max(0, s.a * (s.life/100)).toFixed(2)})`;
+        ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+        if (s.life<=0) sparks.splice(i,1);
+      }
+      requestAnimationFrame(step);
+    }
+    step();
+  }
+
+  function startBokeh() {
+    const canvas = $("#bokehCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let w = canvas.width = innerWidth;
+    let h = canvas.height = innerHeight;
+    const dots = [];
+    for (let i=0;i<28;i++){
+      dots.push({x:Math.random()*w, y:Math.random()*h, r:20+Math.random()*60, alpha:0.04+Math.random()*0.12, vy:0.1+Math.random()*0.3});
+    }
+    window.addEventListener('resize', ()=>{ w=canvas.width=innerWidth; h=canvas.height=innerHeight; });
+    function draw(){
+      ctx.clearRect(0,0,w,h);
+      dots.forEach(d=>{
+        d.y -= d.vy; if (d.y < -100) d.y = h + 100;
+        ctx.beginPath(); ctx.fillStyle = `rgba(255,214,107,${d.alpha})`; ctx.arc(d.x,d.y,d.r,0,Math.PI*2); ctx.fill();
+      });
+      requestAnimationFrame(draw);
+    }
+    draw();
+  }
+
+  function startBalloons(cfg = {}) {
+    const container = $("#balloons");
+    if (!container) return;
+    const count = cfg.count || 10;
+    const colors = cfg.colors || ['#ffc976','#ff9fb0','#9ee6ff','#ffd86b','#ffd1ee'];
+
+    function spawnOne() {
+      const b = document.createElement('div');
+      b.className = 'balloon';
+      const size = 40 + Math.random()*90;
+      b.style.width = b.style.height = size + 'px';
+      b.style.left = Math.random()*95 + 'vw';
+      b.style.background = colors[Math.floor(Math.random()*colors.length)];
+      const duration = 10 + Math.random()*18;
+      const delay = Math.random()*5;
+      b.style.animation = `riseUp ${duration}s linear ${delay}s forwards, sway ${3 + Math.random()*2}s ease-in-out ${delay}s infinite`;
+      container.appendChild(b);
+      setTimeout(()=> {
+        b.style.transition = 'opacity 0.6s';
+        b.style.opacity = '0';
+        setTimeout(()=> { try{ b.remove(); } catch(e){} }, 700);
+      }, (duration + delay)*1000);
+    }
+
+    for (let i=0;i<count;i++) spawnOne();
+    if (!container._balloonInterval) {
+      container._balloonInterval = setInterval(()=> { for(let k=0;k< (1+Math.floor(Math.random()*2));k++) spawnOne(); }, 6000 + Math.random()*4000);
+    }
+  }
+
+  /* ---------- Wishes popup wiring (UPDATED to use Apps Script GET) ---------- */
+  function wireWishes() {
+    const open = $("#openWishes");
+    const close = $("#closePopup");
+    const close2 = $("#closePopup2");
+    const popup = $("#wishesPopup");
+    const form = $("#wishesForm");
+
+    if (open) open.addEventListener('click', ()=> { if (popup) popup.style.display = 'flex'; });
+    if (close) close.addEventListener('click', ()=> { if (popup) popup.style.display = 'none'; });
+    if (close2) close2.addEventListener('click', ()=> { if (popup) popup.style.display = 'none'; });
+
+    // Reactions wiring (unchanged)
+    document.querySelectorAll('.reaction').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const parent = btn.closest('.popup-content');
+        if (!parent) return;
+        const el = document.createElement('div');
+        el.textContent = btn.textContent;
+        el.style.position = 'absolute';
+        el.style.left = '50%';
+        el.style.top = '60%';
+        el.style.transform = 'translateX(-50%)';
+        el.style.fontSize = '22px';
+        parent.appendChild(el);
+        el.animate([{transform:'translateY(0)', opacity:1},{transform:'translateY(-80px)', opacity:0}], {duration:900});
+        setTimeout(()=> el.remove(), 900);
+      });
+    });
+
+    // --- NEW: client-side submission using your Apps Script GET endpoint ---
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const nameEl = document.getElementById('wishName');
+        const msgEl = document.getElementById('wishMessage');
+        const name = nameEl ? nameEl.value.trim() : '';
+        const message = msgEl ? msgEl.value.trim() : '';
+
+        if (!name || !message) {
+          alert('Please enter name and message.');
+          return;
+        }
+
+        const thanks = document.getElementById('thanksMessage');
+        if (thanks) { thanks.style.display = 'block'; }
+
+        // <-- YOUR APPS SCRIPT URL (from deployment) -->
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwitvUfdApwgmCQNvbSO1OhxwKP8ljPrg-pTOSEN5pWcCnoCNsQ3J9E7aAPZZ2t2y7yvA/exec';
+
+        // Build GET URL
+        const url = APPS_SCRIPT_URL + '?name=' + encodeURIComponent(name) + '&message=' + encodeURIComponent(message);
+
+        // Use fetch with no-cors so the browser won't block due to missing CORS headers.
+        // The request still reaches Apps Script and the sheet gets appended.
+        fetch(url, { method: 'GET', mode: 'no-cors' })
+          .catch((err) => {
+            console.warn('Send error (this may still succeed server-side):', err);
+          });
+
+        // Close popup after brief delay and reset form
+        setTimeout(()=> {
+          if (popup) popup.style.display = 'none';
+          if (thanks) thanks.style.display = 'none';
+          form.reset();
+        }, 1100);
+      });
+    }
+  }
+
+  /* ---------- Robust audio toggle ---------- */
+  function wireAudio() {
+    const btn = $("#audioToggle");
+    if (!btn) return;
+
+    let audio = $("#myAudio");
+    if (!audio) {
+      audio = document.createElement('audio');
+      audio.id = 'myAudio';
+      audio.loop = true;
+      audio.preload = 'none';
+      document.body.appendChild(audio);
+    }
+    if (!audio.src || audio.src.trim() === '') audio.src = "music.mp3";
+
+    function setIcon(isPlaying) {
+      btn.textContent = isPlaying ? '🔊' : '🔇';
+      btn.setAttribute('aria-pressed', isPlaying ? 'true' : 'false');
+    }
+
+    setIcon(!audio.paused && !audio.ended);
+
+    btn.style.pointerEvents = 'auto';
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        if (audio.paused) {
+          await audio.play();
+          setIcon(true);
+        } else {
+          audio.pause();
+          setIcon(false);
+        }
+      } catch (err) {
+        console.warn('Audio play error:', err);
+        btn.textContent = '▶️';
+      }
+    });
+
+    function firstGesture() {
+      try {
+        if (audio.paused) {
+          audio.play().then(()=> setIcon(true)).catch(()=>{});
+        }
+      } catch(e){}
+      window.removeEventListener('click', firstGesture);
+      window.removeEventListener('touchstart', firstGesture);
+    }
+    window.addEventListener('click', firstGesture, {passive:true});
+    window.addEventListener('touchstart', firstGesture, {passive:true});
+  }
+
+  /* ---------- Initialization ---------- */
+  document.addEventListener('DOMContentLoaded', ()=> {
+    updatePreloaderCountdown();
+    countdownInterval = setInterval(updatePreloaderCountdown, 1000);
+
+    wireWishes();
+    wireAudio();
+
+    const { startTs, endTs, now } = getTargetStartAndEnd();
+    if (now < startTs) {
+      const msUntil = startTs - now;
+      revealTimeout = setTimeout(()=> {
+        if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+        revealMainContent();
+        scheduleHideAfterWindow(endTs);
+      }, msUntil + 50);
+    } else if (now >= startTs && now < endTs) {
+      revealMainContent();
+      scheduleHideAfterWindow(endTs);
+    }
+  });
+
+  // Expose helper for testing
+  window.__revealNow = function(){ revealMainContent(); };
+  window.__startBalloons = function(){ startBalloons(); };
+
+})();
+
+(function(){
+  function ensure(id, tag='div') {
+    let el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement(tag);
+      el.id = id;
+      document.body.appendChild(el);
+      console.log('Created', id);
+    }
+    return el;
+  }
+
+})();
