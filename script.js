@@ -381,7 +381,7 @@
       audio.preload = 'none';
       document.body.appendChild(audio);
     }
-    if (!audio.src || audio.src.trim() === '') audio.src = "music.mp3";
+    if (!audio.src || audio.src.trim() === '') audio.src = "happy.mp3";
 
     function setIcon(isPlaying) {
       btn.textContent = isPlaying ? '🔊' : '🔇';
