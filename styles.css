@@ -192,19 +192,20 @@ html,body{
 .handwriting-names.name-entrance{animation:namePop 1.6s ease}
 
 /* Album - glass matching */
-.photo-album{
+.photo-album {
   position:relative;
   height:360px;
   border-radius:18px;
   overflow:hidden;
   margin:14px auto 8px;
+  background:#000;
+  animation: albumGlow 5s ease-in-out infinite;
+}
 
-  /* REMOVE transparency & blur */
-  background: #000;          /* or any solid color */
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border: none;
-  box-shadow: none;
+@keyframes albumGlow {
+  0% { box-shadow:0 0 20px rgba(255,215,120,0.3); }
+  50% { box-shadow:0 0 40px rgba(255,215,120,0.8); }
+  100% { box-shadow:0 0 20px rgba(255,215,120,0.3); }
 }
 .album-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1.1s ease}
 .album-photo.active{opacity:1}
